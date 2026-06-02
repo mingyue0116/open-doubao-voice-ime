@@ -37,3 +37,8 @@ config.json
 *.bak
 test_write.txt
 
+
+# Python cache
+__pycache__/
+*.pyc
+
