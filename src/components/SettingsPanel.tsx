@@ -277,20 +277,6 @@ function GeneralTab({
         label="窗口置顶"
         control={<Switch checked={config.always_on_top} onChange={(v) => update({ always_on_top: v })} />}
       />
-      <Item
-        label="主题"
-        control={
-          <Segmented
-            value={config.theme}
-            options={[
-              { value: "system", label: "系统" },
-              { value: "light",  label: "浅色" },
-              { value: "dark",   label: "深色" },
-            ]}
-            onChange={(v) => update({ theme: v })}
-          />
-        }
-      />
     </div>
   );
 }
@@ -310,22 +296,16 @@ function AsrTab({
         }
       />
       <Item
-        label="Token"
+        label="Access Token"
         control={
-          <TextInput value={config.doubao_token} onChange={(v) => update({ doubao_token: v })} placeholder="请输入 Token" type="password" />
+          <TextInput value={config.doubao_token} onChange={(v) => update({ doubao_token: v })} placeholder="请输入 Access Token" type="password" />
         }
       />
       <Item
         label="Secret"
+        hint="API 鉴权密钥（二选一）"
         control={
           <TextInput value={config.doubao_secret} onChange={(v) => update({ doubao_secret: v })} placeholder="请输入 Secret" type="password" />
-        }
-      />
-      <Item
-        label="Cluster"
-        hint="流式识别服务名"
-        control={
-          <TextInput value={config.doubao_cluster} onChange={(v) => update({ doubao_cluster: v })} placeholder="volc_seedasr_streaming" />
         }
       />
       <GuideCard />
@@ -359,8 +339,8 @@ function GuideCard() {
       </div>
       <ol style={{ margin: "0 0 10px 16px", padding: 0, fontSize: 11, color: "#515154", lineHeight: 1.6 }}>
         <li>注册 / 登录火山引擎账号</li>
-        <li>开通「语音技术」服务,创建应用获取 App ID</li>
-        <li>在「在线体验」或「控制台」获取 Token 和 Secret</li>
+        <li>开通「语音技术」服务，创建应用获取 App ID</li>
+        <li>在控制台获取 Access Token 和 Secret</li>
       </ol>
 
       <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
@@ -540,44 +520,5 @@ function Switch({
         }}
       />
     </button>
-  );
-}
-
-function Segmented<T extends string>({
-  value, options, onChange,
-}: {
-  value: T;
-  options: { value: T; label: string }[];
-  onChange: (v: T) => void;
-}) {
-  return (
-    <div
-      style={{ padding: 2, borderRadius: 5, background: "#f2f2f7", display: "inline-flex" }}
-    >
-      {options.map((o) => {
-        const active = o.value === value;
-        return (
-          <button
-            key={o.value}
-            onClick={() => onChange(o.value)}
-            style={{
-              height: 22,
-              padding: "0 10px",
-              borderRadius: 4,
-              fontSize: 11.5,
-              background: active ? "#ffffff" : "transparent",
-              color: active ? "#1d1d1f" : "#86868b",
-              fontWeight: active ? 500 : 400,
-              boxShadow: active ? "0 1px 2px rgba(0,0,0,0.06)" : "none",
-              border: "none",
-              cursor: "pointer",
-              transition: "all 0.1s",
-            }}
-          >
-            {o.label}
-          </button>
-        );
-      })}
-    </div>
   );
 }

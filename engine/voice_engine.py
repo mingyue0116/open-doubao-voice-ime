@@ -1,17 +1,15 @@
 ﻿#!/usr/bin/env python3
-# Voice IME Engine v8 - streaming segment + session correction
+# Voice IME Engine — streaming ASR via Volcengine Doubao
 
-import json, sys, os, time, threading, logging, uuid
+import json, sys, time, threading, logging, uuid
 from collections import deque
 import queue
 import numpy as np
 import sounddevice as sd
-import requests, uuid
 
 _ws_available = True
 try:
     import websockets.sync.client as ws_client
-    import asyncio
 except ImportError:
     _ws_available = False
 
@@ -40,8 +38,6 @@ class VoiceEngine:
         self._end_segment_requested = False
         self._last_segment_time = 0.0
         self._session_text = ""
-        self._session_end_time = 0.0
-        self._session_correcting = False
         self._msg_queue = queue.Queue()
         self._writer_stop = threading.Event()
         self._writer_thread = threading.Thread(target=self._stdout_writer, daemon=True)
@@ -49,11 +45,6 @@ class VoiceEngine:
         self.doubao_appid = ""
         self.doubao_token = ""
         self.doubao_secret = ""
-        self.doubao_cluster = "volc_seedasr_streaming"
-        self.corrector_api_base = "https://api.deepseek.com/v1"
-        self.corrector_api_key = ""
-        self.corrector_model = "deepseek-chat"
-        self.correction_style = ""
         self._last_pasted = ""  # 去重:记录最后粘贴的文本
 
     def send(self, msg):
@@ -88,13 +79,10 @@ class VoiceEngine:
             self.apply_batch_config(cmd.get("config", {}))
 
     def update_config(self, key, value=""):
-        mapping = {"doubao_appid": "doubao_appid", "doubao_token": "doubao_token", "doubao_secret": "doubao_secret", "doubao_cluster": "doubao_cluster", "corrector_api_key": "corrector_api_key", "corrector_api_base": "corrector_api_base", "corrector_model": "corrector_model"}
+        mapping = {"doubao_appid": "doubao_appid", "doubao_token": "doubao_token", "doubao_secret": "doubao_secret"}
         if key in mapping:
             setattr(self, mapping[key], value)
-            log.info("config: %s = %s", key, "***" if "key" in key or "token" in key or "secret" in key else value)
-        elif key in ("correction_style", "language_style"):
-            self.correction_style = value
-            log.info("style: %s", value)
+            log.info("config: %s = %s", key, "***" if "token" in key else value)
 
     def apply_batch_config(self, config):
         for key, value in config.items():
@@ -114,8 +102,6 @@ class VoiceEngine:
         self.silence_start = 0.0
         self._last_segment_time = time.time()
         self._session_text = ""
-        self._session_end_time = 0.0
-        self._session_correcting = False
         self.partial_text = ""
         self.final_text = ""
         self._last_pasted = ""
@@ -139,7 +125,7 @@ class VoiceEngine:
         if not self.recording:
             return
         try:
-            api_key = self.doubao_secret or self.doubao_token or ""
+            api_key = self.doubao_secret or self.doubao_token
             if not api_key:
                 log.error("doubao: missing API Key")
                 return
@@ -154,6 +140,12 @@ class VoiceEngine:
                     "X-Api-Sequence": "-1",
                 },
             )
+            # ★ 二次检查: 连接期间用户可能已经按了停止
+            if not self.recording:
+                log.info("_open_ws: recording stopped during connect, closing")
+                try: ws.close()
+                except: pass
+                return
             self.ws = ws
             log.info("ws opened")
             import gzip
@@ -164,6 +156,13 @@ class VoiceEngine:
             ack = ws.recv(timeout=5)
             if isinstance(ack, bytes):
                 log.info("ws ack received")
+            # ★ 三次检查: 握手完成后再次确认,防止发送脏 "recording" 状态
+            if not self.recording:
+                log.info("_open_ws: recording stopped after handshake, closing")
+                try: ws.close()
+                except: pass
+                self.ws = None
+                return
             self.send({"type": "status", "state": "recording"})
             log.info("streaming recording started")
             self._ws_read_loop()
@@ -276,9 +275,16 @@ class VoiceEngine:
                                         self.final_text = t
                     except:
                         break
-                self.ws.close()
+                try: self.ws.close()
+                except: pass
             except:
                 pass
+            self.ws = None
+        # 二次清理: 防 _open_ws 竞态打开了新 WS
+        time.sleep(0.1)
+        if self.ws:
+            try: self.ws.close()
+            except: pass
             self.ws = None
         # 流式输出已经在 _on_segment_end 里逐段粘贴了
         # stop_recording 只处理最后的尾段:如果跟已粘贴的不同才粘贴,相同就跳过
@@ -352,7 +358,6 @@ class VoiceEngine:
             # 流式输出: 每段一识别完就立即粘贴
             self._paste_text(clean)
             self._last_pasted = clean  # 记下来,stop_recording 跳过它
-            self._session_end_time = time.time()
         else:
             if not self.continuous:
                 self.send({"type": "status", "state": "no_speech"})
@@ -365,15 +370,6 @@ class VoiceEngine:
         if not self.continuous:
             self.send({"type": "status", "state": "idle"})
         # continuous 时不发任何 status,录音态(红色)始终不变
-
-    def _do_session_correct(self):
-        """已禁用: 用户要求只保留基础流式识别,不需要 LLM 润色"""
-        self._session_correcting = False
-        return
-
-    def _correct(self, text):
-        """\u5df2\u7981\u7528: \u7528\u6237\u8981\u6c42\u53ea\u4fdd\u7559\u57fa\u7840\u6d41\u5f0f\u8bc6\u522b,\u4e0d\u9700\u8981 LLM \u6da6\u8272"""
-        return text
 
     def _paste_text(self, text):
         try:

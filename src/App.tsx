@@ -82,13 +82,6 @@ function App() {
     return <SettingsPanel standalone />;
   }
 
-  // 全局禁止右键菜单
-  useEffect(() => {
-    const prevent = (e: MouseEvent) => e.preventDefault();
-    document.addEventListener("contextmenu", prevent);
-    return () => document.removeEventListener("contextmenu", prevent);
-  }, []);
-
   return (
     <>
       <ConfigLoader />

@@ -102,13 +102,11 @@ fn open_settings_window(app: &AppHandle) -> Result<(), String> {
         .unwrap_or((1920.0, 1080.0, 0.0, 0.0));
 
     // 默认: settings 出现在 main 窗口**上方**,水平居中于 main
-    // 这样视觉上"小球展开成面板",跟用户预期一致
+    // main 窗口现在是 120×120,中心在 (p.x+60, p.y+60)
+    // settings 是 440×300,中心在 (x+220, y+150)
     let (mut x, mut y) = if let Some(p) = main_pos {
-        // 水平: 让 main 中心对齐 settings 中心
-        // main 中心 = p.x + 24,settings 中心 = x + 220,  → x = p.x + 24 - 220 = p.x - 196
-        let x0 = p.x as f64 - 196.0;
-        // 垂直: 在 main 上方 8px
-        let y0 = p.y as f64 - 300.0 - 8.0;
+        let x0 = p.x as f64 + 60.0 - 220.0;  // main 中心对齐 settings 中心
+        let y0 = p.y as f64 - 300.0 - 8.0;   // settings 在 main 上方 8px
         (x0, y0)
     } else {
         (screen_x + (screen_w - 440.0) / 2.0, screen_y + (screen_h - 300.0) / 2.0)
@@ -117,7 +115,7 @@ fn open_settings_window(app: &AppHandle) -> Result<(), String> {
     // 垂直: 上方空间不够 -> 改成 main 下方
     if y < screen_y {
         if let Some(p) = main_pos {
-            y = p.y as f64 + 48.0 + 8.0;
+            y = p.y as f64 + 120.0 + 8.0;
         }
     }
     // 水平: 左边超出 -> 贴屏幕左边
@@ -151,7 +149,11 @@ fn open_settings_window(app: &AppHandle) -> Result<(), String> {
         .shadow(false)
         .position(x, y)
         .build()
-        .map(|_| ())
+        .map(|w| {
+            // 确保设置窗口可见并获取焦点
+            let _ = w.show();
+            let _ = w.set_focus();
+        })
         .map_err(|e| e.to_string())
 }
 

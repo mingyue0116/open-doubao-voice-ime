@@ -1,6 +1,5 @@
 sounddevice
 numpy
-requests
 pyperclip
 pyautogui
 pywin32
